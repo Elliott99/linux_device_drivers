@@ -81,20 +81,25 @@ static ssize_t device_read(struct file * filp2, char *buffer2, size_t length2, l
 
 static ssize_t device_write(struct file * filp, const char *buffer, size_t length, loff_t *offset){
 	ssize_t bytes_read_in=0;
-	if (*write_pointer==0){
-		return 0;
-	}
-	copy_from_user(write_buffer,buffer,length);
-	write_buffer[length-1]='\0';
+	ssize_t ret=length;
 	write_pointer=write_buffer;
+	if (copy_from_user(write_pointer,buffer,length)!=0){
+		pr_alert("Failed to read all bytes from userspace");
+		return -EFAULT;
+	}
+
+	write_buffer[length-1]='\0';
 	while (length && *write_pointer){
 		length--;
 		write_pointer++;
 		bytes_read_in++;
 	}
+	pr_info("The length value is %lu",length);
+	pr_info("write pointer now points to %c",*write_pointer);
 	pr_info("The device had %lu bytes written to it",bytes_read_in);
 	pr_info("Got message from user: %s",write_buffer);
-	return bytes_read_in;
+	*offset+=bytes_read_in;
+	return ret;
 }
 
 MODULE_LICENSE("GPL");

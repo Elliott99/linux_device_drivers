@@ -27,7 +27,7 @@ static struct class * cls;
 static int major_num;
 static int counter=0;
 static char message_buffer[BUF_LEN];
-static char * message_pointer;
+static char * message_pointer="default";
 static char * write_pointer;
 static char write_buffer[BUF_LEN];
 
@@ -68,6 +68,11 @@ void cleanup_module(void){
 static ssize_t device_read(struct file * filp2, char *buffer2, size_t length2, loff_t *offset2){
 	sprintf(message_buffer,"Yes,you read from the driver this many times: %d",counter++);
 	ssize_t message_length=strlen(message_buffer);
+	*offset2+=message_length;
+	if (*offset2 > message_length){
+		return 0;
+	}
+
 	message_pointer=message_buffer;
 	if(copy_to_user(buffer2,message_pointer,message_length+1)!=0){
 		pr_alert("Could not successfully copy all bytes to userspace");
@@ -76,13 +81,14 @@ static ssize_t device_read(struct file * filp2, char *buffer2, size_t length2, l
 	buffer2[message_length]='\0';
 	pr_info("Outputted %lu bytes with %lu bytes remaining in the buffer",strlen(buffer2),length2-strlen(buffer2));
 	pr_info("The data in the userspace buffer is now %s",buffer2);
-	return 0;
+	counter--;
+	return message_length;
 }
 
 static ssize_t device_write(struct file * filp, const char *buffer, size_t length, loff_t *offset){
 	ssize_t bytes_read_in=0;
-	ssize_t ret=length;
 	write_pointer=write_buffer;
+	ssize_t ret=length;
 	if (copy_from_user(write_pointer,buffer,length)!=0){
 		pr_alert("Failed to read all bytes from userspace");
 		return -EFAULT;
@@ -94,10 +100,9 @@ static ssize_t device_write(struct file * filp, const char *buffer, size_t lengt
 		write_pointer++;
 		bytes_read_in++;
 	}
-	pr_info("The length value is %lu",length);
-	pr_info("write pointer now points to %c",*write_pointer);
 	pr_info("The device had %lu bytes written to it",bytes_read_in);
 	pr_info("Got message from user: %s",write_buffer);
+	pr_info("The string length of the write_buffer in kernelspace is %lu",strlen(write_buffer));
 	*offset+=bytes_read_in;
 	return ret;
 }
